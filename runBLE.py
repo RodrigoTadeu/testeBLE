@@ -4,8 +4,10 @@ import dbus.exceptions
 import dbus.mainloop.glib
 import dbus.service
 import subprocess
+import serial
+import Adafruit_BBIO.GPIO as GPIO
 import os
-from serialApp import serialApp
+import time
 from configBLE import (
     Advertisement,
     Characteristic,
@@ -66,8 +68,10 @@ def register_app_error_cb(error):
     mainloop.quit()
 
 vetor = []
-ser = serialApp()
-ser.connectSerial()
+a = [0x3a, 0x12, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x3b]
+GPIO.setup("P8_8", GPIO.OUT)
+GPIO.output("P8_8", GPIO.HIGH)
+ser=serial.Serial('/dev/ttyS1',115200,bytesize=serial.EIGHTBITS,parity=serial.PARITY_NONE,stopbits=serial.STOPBITS_ONE, timeout=3)
 
 class TestService(Service):
     TEST_SVC_UUID = '12345678-1234-5678-1234-56789abcdef0'
@@ -88,35 +92,26 @@ class TestCharacteristic(Characteristic):
         self.value = []
 
     def ReadValue(self, options):
-        #print(self.value)
-        #print('TestCharacteristic Read: ' + a)
-        bytes_value = bytes(self.value)
-        #print(bytes_value)
-        string_value = bytes_value.decode('utf-8')
-        print(string_value)
-        #b = self.value.hex()
-        #print(b)
-        #print(bytes.fromhex(self.value))
-        #utf8_string = ''.join([chr(byte) for byte in self.value])
-        #vetor.append(string_value)
-        #palavra = ''.join(vetor)
-        #with open("informacao.txt", "w") as arquivo:
-            #arquivo.write(palavra)
-        #a = bytes(self.value)
-        #ser.writeSerial(c)
-        #ser.readSerial()
-        #c = (b'recebido')
-        return self.value
+        return self.read
 
     def WriteValue(self, value, options):
         print(value)
-        """bytes_value = bytes(value)
-        string_value = bytes_value.decode('utf-8')
-        print(string_value)"""
-        ser.writeSerial(value)
         self.value = value
-        #ser.writeSerial(value)
-        #self.value = value
+
+        bytes_value = bytes(self.value)
+        string_value = bytes_value.decode('utf-8')
+        if string_value == 'get':
+            print(string_value)
+            c=ser.write(bytearray(a))
+            ser.flush()
+            print("Enviado")
+            GPIO.output("P8_8", GPIO.LOW)
+            read=ser.readline()
+            ser.flush()
+            print("Recebido")
+            GPIO.output("P8_8", GPIO.HIGH)
+            print(read)
+            self.read = read
 
 class TestAdvertisement(Advertisement):
     def __init__(self, bus, index):
@@ -243,11 +238,10 @@ def main():
         object_removed, 
         signal_name="InterfacesRemoved", 
         dbus_interface="org.freedesktop.DBus.ObjectManager")"""
-
     mainloop.run()
     #ad_manager.UnregisterAdvertisement(advertisement)
     #dbus.service.Object.remove_from_connection(advertisement)
 
 if __name__ == "__main__":
-    #os.system('sudo systemctl restart bluetooth')
+    os.system('sudo systemctl restart bluetooth')
     main()

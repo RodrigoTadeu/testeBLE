@@ -1,12 +1,10 @@
 import serial
-
+import Adafruit_BBIO.GPIO as GPIO
 
 class serialApp():
     def __init__(self):
-        self.tty = serial.Serial()
-        self.tty.port = '/dev/ttyS1'
-        self.tty.baudrate = 9600
-        self.tty.timeout = 1
+        self.tty=serial.Serial('/dev/ttyS1', 115200, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=3)
+        GPIO.setup("P8_8", GPIO.OUT)
 
     def connectSerial(self):
         try:
@@ -15,18 +13,20 @@ class serialApp():
         except:
             print('erro')
 
+
     def readSerial(self):
-        read=self.tty.read(10)
-        print(read.decode('utf-8'))
+        GPIO.output("P8_8", GPIO.LOW)
+        read=self.tty.readline()
+        self.tty.flush()
+        print(read)
 
 
-    def writeSerial(self, value):
-        #i=0
-        a = self.tty.write(value)
-        print(a)
-        #while(i<=10):
-        #self.tty.write(b'cermob')
-        self.tty.flushOutput()
-        #if a != 0:
-            #print("Recebido")
-            #i+1"""
+    def writeSerial(self):
+        GPIO.output("P8_8", GPIO.HIGH) 
+        hash_read = [0x3a, 0x12, 0x2, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x3b]
+        a = self.tty.write(bytearray(hash_read))
+        self.tty.flush()
+        print("Enviado!")
+
+    def close(self):
+        self.tty.close()
