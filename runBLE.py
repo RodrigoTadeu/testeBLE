@@ -25,19 +25,14 @@ import sys
 import time
 
 MainLoop = None
-"""try:
+try:
     from gi.repository import GLib
 
     MainLoop = GLib.MainLoop
 except ImportError:
     import gobject as GObject
 
-    MainLoop = GObject.MainLoop"""
-
-try:
-  from gi.repository import GObject
-except ImportError:
-  import gobject as GObject
+    MainLoop = GObject.MainLoop
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -99,27 +94,23 @@ class TestCharacteristic(Characteristic):
         self.value = []
         array_de_byte = []
         self.notifying = False
-        #GObject.timeout_add(1000, self.notify(options=None))
 
-    def notify_battery_level(self):
+    def notify_infoUART(self):
         if not self.notifying:
             return
         array_de_byte = dbus.Array(self.value, signature=dbus.Signature('y'))
-        print(array_de_byte)
         packet_size = 512  # Tamanho máximo do pacote
         packets = [array_de_byte[i:i + packet_size] for i in range(0, len(array_de_byte), packet_size)]
         print(len(packets))
         for i, packet in enumerate(packets):
             self.value = []
             packet_data = bytes(packet)
-            print(packet_data)
             self.value = packet_data
             a = dbus.Array(self.value, signature=dbus.Signature('y'))
             self.PropertiesChanged(
                     GATT_CHRC_IFACE,
                     { 'Value': a }, [])
-            time.sleep(5)
-
+            time.sleep(2)
 
     def ReadValue(self, options):
 
@@ -143,6 +134,7 @@ class TestCharacteristic(Characteristic):
             GPIO.output("P8_8", GPIO.HIGH)
             print(read)
             self.value = read
+            print(len(self.value)) 
             """array_de_byte = dbus.Array(read, signature=dbus.Signature('y'))
             packet_size = 512  # Tamanho máximo do pacote
             packets = [array_de_byte[i:i + packet_size] for i in range(0, len(array_de_byte), packet_size)]
@@ -221,18 +213,18 @@ def main():
     # Get manager objs
     service_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
     ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
-    ler = dbus.Interface(adapter_obj, GATT_CHRC_IFACE)
+
     advertisement = TestAdvertisement(bus, 1)
     obj = bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez")
-    
+
     device_interface = dbus.Interface(adapter_obj, 'org.bluez.GattManager1')
     agent = Agent(bus, AGENT_PATH)
 
     app = Application(bus)
     app.add_service(TestService(bus, 2))
 
-    mainloop =GObject.MainLoop()
-   
+    mainloop = MainLoop()
+
     agent_manager = dbus.Interface(obj, "org.bluez.AgentManager1")
     #agent_manager.RegisterAgent(AGENT_PATH, "DisplayYesNo")
     agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
@@ -253,7 +245,7 @@ def main():
     )
 
     mainloop.run()
-    
+
 if __name__ == "__main__":
     os.system('sudo systemctl restart bluetooth')
     main()
