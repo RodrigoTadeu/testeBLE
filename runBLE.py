@@ -22,16 +22,22 @@ import requests
 import array
 from enum import Enum
 import sys
+import time
 
 MainLoop = None
-try:
+"""try:
     from gi.repository import GLib
 
     MainLoop = GLib.MainLoop
 except ImportError:
     import gobject as GObject
 
-    MainLoop = GObject.MainLoop
+    MainLoop = GObject.MainLoop"""
+
+try:
+  from gi.repository import GObject
+except ImportError:
+  import gobject as GObject
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -50,6 +56,7 @@ GATT_MANAGER_IFACE = "org.bluez.GattManager1"
 LE_ADVERTISEMENT_IFACE = "org.bluez.LEAdvertisement1"
 LE_ADVERTISING_MANAGER_IFACE = "org.bluez.LEAdvertisingManager1"
 DBUS_OM_IFACE = 'org.freedesktop.DBus.ObjectManager'
+GATT_CHRC_IFACE = 'org.bluez.GattCharacteristic1'
 
 class InvalidArgsException(dbus.exceptions.DBusException):
     _dbus_error_name = "org.freedesktop.DBus.Error.InvalidArgs"
@@ -87,12 +94,36 @@ class TestCharacteristic(Characteristic):
         Characteristic.__init__(
                 self, bus, index,
                 self.TEST_CHRC_UUID,
-                ['read', 'write', 'writable-auxiliaries'],
+                ['read', 'write', 'notify'],
                 service)
         self.value = []
+        array_de_byte = []
+        self.notifying = False
+        #GObject.timeout_add(1000, self.notify(options=None))
+
+    def notify_battery_level(self):
+        if not self.notifying:
+            return
+        array_de_byte = dbus.Array(self.value, signature=dbus.Signature('y'))
+        print(array_de_byte)
+        packet_size = 512  # Tamanho máximo do pacote
+        packets = [array_de_byte[i:i + packet_size] for i in range(0, len(array_de_byte), packet_size)]
+        print(len(packets))
+        for i, packet in enumerate(packets):
+            self.value = []
+            packet_data = bytes(packet)
+            print(packet_data)
+            self.value = packet_data
+            a = dbus.Array(self.value, signature=dbus.Signature('y'))
+            self.PropertiesChanged(
+                    GATT_CHRC_IFACE,
+                    { 'Value': a }, [])
+            time.sleep(5)
+
 
     def ReadValue(self, options):
-        return self.read
+
+        return self.value
 
     def WriteValue(self, value, options):
         print(value)
@@ -111,7 +142,32 @@ class TestCharacteristic(Characteristic):
             print("Recebido")
             GPIO.output("P8_8", GPIO.HIGH)
             print(read)
-            self.read = read
+            self.value = read
+            """array_de_byte = dbus.Array(read, signature=dbus.Signature('y'))
+            packet_size = 512  # Tamanho máximo do pacote
+            packets = [array_de_byte[i:i + packet_size] for i in range(0, len(array_de_byte), packet_size)]
+            print(len(packets))
+            for i, packet in enumerate(packets):
+                self.value = []
+                packet_data = bytes(packet)
+                print(packet_data)
+                self.value = packet_data"""
+
+    def StartNotify(self):
+        if self.notifying:
+            print('Already notifying, nothing to do')
+            return
+
+        self.notifying = True
+        self.notify_battery_level()
+
+    def StopNotify(self):
+        if not self.notifying:
+            print('Not notifying, nothing to do')
+            return
+
+        self.notifying = False
+
 
 class TestAdvertisement(Advertisement):
     def __init__(self, bus, index):
@@ -143,28 +199,10 @@ def find_adapter(bus):
 
     return None
 
-"""def device_connected(path, dbus):
-    print("Dispositivo conectado: {}".format(path))
-
-def device_disconnected(path):
-    print("Dispositivo desconectado: {}".format(path))
-
-def property_changed(interface, changed, invalidated, path):
-    if interface != "org.bluez.Device1":
-        return
-    if "Connected" in changed:
-        if changed["Connected"]:
-            device_connected(path, dbus)
-
-def object_removed(object_path, interfaces):
-    if object_path.startswith("/org/bluez"):
-        device_disconnected(object_path)"""
-
 AGENT_PATH = "/com/punchthrough/agent"
 
 def main():
-    global mainloop
-    
+    global mainloop    
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
     adapter = find_adapter(bus)
@@ -183,27 +221,18 @@ def main():
     # Get manager objs
     service_manager = dbus.Interface(adapter_obj, GATT_MANAGER_IFACE)
     ad_manager = dbus.Interface(adapter_obj, LE_ADVERTISING_MANAGER_IFACE)
-
+    ler = dbus.Interface(adapter_obj, GATT_CHRC_IFACE)
     advertisement = TestAdvertisement(bus, 1)
     obj = bus.get_object(BLUEZ_SERVICE_NAME, "/org/bluez")
-
+    
+    device_interface = dbus.Interface(adapter_obj, 'org.bluez.GattManager1')
     agent = Agent(bus, AGENT_PATH)
 
     app = Application(bus)
     app.add_service(TestService(bus, 2))
 
-    """# Obter o objeto do adaptador Bluetooth
-    adapter_obj = bus.get_object("org.bluez", "/org/bluez/hci0")
-    adapter_iface = dbus.Interface(adapter_obj, "org.freedesktop.DBus.Properties")
-    adapter_props = adapter_iface.GetAll("org.bluez.Adapter1")
-
-    # Obter os objetos dos dispositivos Bluetooth
-    manager_obj = bus.get_object("org.bluez", "/")
-    manager_iface = dbus.Interface(manager_obj, "org.freedesktop.DBus.ObjectManager")
-    objects = manager_iface.GetManagedObjects()"""
-
-    mainloop = MainLoop()
-
+    mainloop =GObject.MainLoop()
+   
     agent_manager = dbus.Interface(obj, "org.bluez.AgentManager1")
     #agent_manager.RegisterAgent(AGENT_PATH, "DisplayYesNo")
     agent_manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
@@ -223,25 +252,9 @@ def main():
         error_handler=[register_app_error_cb],
     )
 
-    #agent_manager.RequestDefaultAgent(AGENT_PATH)
-
-    """bus.add_signal_receiver(
-        property_changed,
-        bus_name="org.bluez",
-        signal_name="PropertiesChanged",
-        dbus_interface="org.freedesktop.DBus.Properties",
-        arg0="org.bluez.Device1",
-        path_keyword="path"
-    )
-
-    bus.add_signal_receiver(
-        object_removed, 
-        signal_name="InterfacesRemoved", 
-        dbus_interface="org.freedesktop.DBus.ObjectManager")"""
     mainloop.run()
-    #ad_manager.UnregisterAdvertisement(advertisement)
-    #dbus.service.Object.remove_from_connection(advertisement)
-
+    
 if __name__ == "__main__":
     os.system('sudo systemctl restart bluetooth')
     main()
+

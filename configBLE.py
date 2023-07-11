@@ -124,7 +124,6 @@ class Characteristic(dbus.service.Object):
     """
     org.bluez.GattCharacteristic1 interface implementation
     """
-
     def __init__(self, bus, index, uuid, flags, service):
         self.path = service.path + "/char" + str(index)
         self.bus = bus
@@ -165,16 +164,6 @@ class Characteristic(dbus.service.Object):
             raise InvalidArgsException()
 
         return self.get_properties()[GATT_CHRC_IFACE]
-
-    """@dbus.service.method(GATT_CHRC_IFACE, out_signature='ay')
-    def ReadValue(self):
-        print ('Default ReadValue called, returning error')
-        raise NotSupportedException()
-
-    @dbus.service.method(GATT_CHRC_IFACE, in_signature='ay')
-    def WriteValue(self, value):
-        print( 'Default WriteValue called, returning error')
-        raise NotSupportedException()"""
 
     @dbus.service.method(GATT_CHRC_IFACE, in_signature="a{sv}", out_signature="ay")
     def ReadValue(self, options):
@@ -233,16 +222,6 @@ class Descriptor(dbus.service.Object):
 
         return self.get_properties()[GATT_DESC_IFACE]
 
-    """@dbus.service.method(GATT_DESC_IFACE, out_signature='ay')
-    def ReadValue(self):
-        print ('Default ReadValue called, returning error')
-        raise NotSupportedException()
-
-    @dbus.service.method(GATT_DESC_IFACE, in_signature='ay')
-    def WriteValue(self, value):
-        print ('Default WriteValue called, returning error')
-        raise NotSupportedException()"""
-
     @dbus.service.method(GATT_DESC_IFACE, in_signature="a{sv}", out_signature="ay" )
     def ReadValue(self, options):
         logger.info("Default ReadValue called, returning error")
@@ -266,7 +245,6 @@ class Advertisement(dbus.service.Object):
         self.service_data = None
         self.local_name = None
         self.include_tx_power = None
-        #self.include_discoverable = None
         self.data = None
         dbus.service.Object.__init__(self, bus, self.path)
 
@@ -289,8 +267,6 @@ class Advertisement(dbus.service.Object):
             properties["LocalName"] = dbus.String(self.local_name)
         if self.include_tx_power is not None:
             properties["IncludeTxPower"] = dbus.Boolean(self.include_tx_power)
-        #if self.include_discoverable is not None:
-            #properties["IncludeDiscoverable"] = dbus.Boolean(self.include_discoverable)
 
         if self.data is not None:
             properties["Data"] = dbus.Dictionary(self.data, signature="yv")
